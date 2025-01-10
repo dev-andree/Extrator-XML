@@ -48,13 +48,32 @@ async function extractDataFromXML(xmlPath) {
     }
 }
 
-// Função para criar a planilha
-function createSpreadsheet(data, outputFile) {
+// Função para criar ou atualizar a planilha
+function createOrUpdateSpreadsheet(data, outputFile) {
     try {
-        // Dados organizados em matriz para a planilha
-        const worksheetData = [
-            ['Número da Nota', 'Emitente', 'Data de Emissão', 'Tipo (Produto/Serviço)', 'Nome do Produto/Serviço', 'Classificação', 'Quantidade', 'Unidade', 'Valor Unitário', 'Valor Total']
-        ];
+        // Criação ou leitura da planilha existente
+        const planilhaDir = path.join(__dirname, 'PLANILHA');
+        if (!fs.existsSync(planilhaDir)) {
+            fs.mkdirSync(planilhaDir);
+        }
+
+        const outputPath = path.join(planilhaDir, outputFile);
+
+        let workbook;
+        let worksheet;
+
+        if (fs.existsSync(outputPath)) {
+            // Se a planilha já existir, lê a planilha existente
+            workbook = XLSX.readFile(outputPath);
+            worksheet = workbook.Sheets[workbook.SheetNames[0]]; // Seleciona a primeira aba
+        } else {
+            // Caso contrário, cria um novo workbook e worksheet
+            workbook = XLSX.utils.book_new();
+            worksheet = XLSX.utils.aoa_to_sheet([
+                ['Número da Nota', 'Emitente', 'Data de Emissão', 'Tipo (Produto/Serviço)', 'Nome do Produto/Serviço', 'Classificação', 'Quantidade', 'Unidade', 'Valor Unitário', 'Valor Total']
+            ]);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'NFe Data');
+        }
 
         // Função para classificar como Consumível ou Patrimonial
         const classifyItem = (nomeProduto) => {
@@ -66,7 +85,7 @@ function createSpreadsheet(data, outputFile) {
         // Adiciona os produtos à planilha
         data.forEach(item => {
             const classificacao = classifyItem(item.xProd); // Classifica o item como Consumível ou Patrimonial
-            worksheetData.push([
+            const newRow = [
                 item.nNF,
                 item.xNome,
                 item.dEmi,
@@ -77,28 +96,15 @@ function createSpreadsheet(data, outputFile) {
                 item.uCom,
                 item.vUnCom,
                 item.vProd
-            ]);
+            ];
+            XLSX.utils.sheet_add_aoa(worksheet, [newRow], { origin: -1 }); // Adiciona no final da planilha
         });
 
-        // Criação da planilha
-        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'NFe Data');
-
-        // Cria a pasta PLANILHA se não existir
-        const planilhaDir = path.join(__dirname, 'PLANILHA');
-        if (!fs.existsSync(planilhaDir)) {
-            fs.mkdirSync(planilhaDir);
-        }
-
-        // Caminho final para o arquivo de saída dentro da pasta PLANILHA
-        const outputPath = path.join(planilhaDir, outputFile);
-
-        // Salva a planilha em arquivo dentro da pasta PLANILHA
+        // Salva a planilha no mesmo caminho
         XLSX.writeFile(workbook, outputPath);
-        console.log("Planilha criada com sucesso em:", outputPath);
+        console.log("Planilha atualizada com sucesso em:", outputPath);
     } catch (err) {
-        console.error("Erro ao criar a planilha:", err.message);
+        console.error("Erro ao criar ou atualizar a planilha:", err.message);
     }
 }
 
@@ -131,8 +137,8 @@ function createSpreadsheet(data, outputFile) {
 
             if (extractedData && extractedData.length > 0) {
                 console.log("Dados extraídos com sucesso:", extractedData);
-                console.log("Gerando planilha...");
-                createSpreadsheet(extractedData, outputFile);
+                console.log("Atualizando planilha...");
+                createOrUpdateSpreadsheet(extractedData, outputFile);
             } else {
                 console.log(`Não foi possível extrair os dados ou nenhum produto foi encontrado no arquivo ${xmlFile}.`);
             }
